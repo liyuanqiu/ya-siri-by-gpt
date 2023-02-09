@@ -2,27 +2,19 @@
 // @ts-ignore
 import nls from "alibabacloud-nls";
 import { createReadStream } from "fs";
-import { syslog } from "../log";
-import { sleep } from "../util";
-import { createAliyunAccessTokenService } from "./access-token-service";
+import { last } from "lodash";
+import { sep } from "path";
+import { logger } from "../log";
+import { formatError, sleep } from "../util";
+
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+const logIdentifier = last(__filename.split(sep))!;
 
 interface AliyunNLSSTTReceivedData {
   payload: { result: string; duration: number };
 }
 
-export async function stt(inputFile: string) {
-  const aliyunNLSTokenService = createAliyunAccessTokenService(
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    process.env.ALIYUN_NLS_TOKEN_ENDPOINT!
-  );
-
-  const token = await aliyunNLSTokenService.getToken();
-
-  if (token === null) {
-    syslog("Get NLS app access token failed!");
-    return;
-  }
-
+export async function stt(inputFile: string, token: string) {
   const audioStream = createReadStream(inputFile, {
     encoding: "binary",
     highWaterMark: 1024,
@@ -36,42 +28,43 @@ export async function stt(inputFile: string) {
     );
   });
 
-  return new Promise<string>((resolve, reject) => {
+  return new Promise<string>((resolve) => {
     audioStream.on("close", async () => {
       const stt = new nls.SpeechRecognition({
         url: process.env.ALIYUN_NLS_WS,
         appkey: process.env.ALIYUN_NLS_APP_KEY,
-        token: token.Id,
+        token,
       });
 
       stt.on("started", (msg: unknown) => {
-        syslog(`STT Client received started: ${msg}`);
+        logger.debug(`${logIdentifier} stt event_started: ${msg}`);
       });
 
       stt.on("completed", (msg: string) => {
-        syslog(`STT Client received completed: ${msg}`);
+        logger.debug(`${logIdentifier} stt event_completed: ${msg}`);
         resolve((JSON.parse(msg) as AliyunNLSSTTReceivedData).payload.result);
       });
 
       stt.on("closed", () => {
-        syslog("STT Client received closed.");
+        logger.debug(`${logIdentifier} stt event_closed`);
       });
 
       stt.on("failed", (msg: unknown) => {
-        syslog(`STT Client received failed: ${msg}`);
+        logger.debug(`${logIdentifier} stt event_failed: ${msg}`);
       });
 
       try {
         await stt.start(stt.defaultStartParams(), true, 6000);
       } catch (error) {
-        syslog(`Error on start STT: ${error}`);
-        reject(`${error}`);
+        logger.error(
+          `${logIdentifier} Failed to start stt: ${formatError(error)}`
+        );
         return;
       }
 
       for (const chunk of audioChunks) {
         if (!stt.sendAudio(chunk)) {
-          reject("Send audio failed!");
+          logger.error(`${logIdentifier} Failed to send audio.`);
           return;
         }
         await sleep(20);
@@ -79,9 +72,11 @@ export async function stt(inputFile: string) {
 
       try {
         await stt.close();
-        syslog("STT Client closed.");
+        logger.info(`${logIdentifier} stt closed.`);
       } catch (error) {
-        syslog(`Error on close STT Client: ${error}`);
+        logger.error(
+          `${logIdentifier} Failed to close stt: ${formatError(error)}`
+        );
       }
     });
   });

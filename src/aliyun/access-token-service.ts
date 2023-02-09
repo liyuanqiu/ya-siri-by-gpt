@@ -1,5 +1,8 @@
 import RPCClient from "@alicloud/pop-core";
-import { syslog } from "../log";
+import { last } from "lodash";
+import { sep } from "path";
+import { logger } from "../log";
+import { formatError } from "../util";
 
 export interface AliyunAccessToken {
   UserId: string;
@@ -11,6 +14,9 @@ interface AliyunCreateTokenResponse {
   ErrMsg: string;
   Token: AliyunAccessToken;
 }
+
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+const logIdentifier = last(__filename.split(sep))!;
 
 export function createAliyunAccessTokenService(endpoint: string) {
   let token: AliyunAccessToken | null = null;
@@ -26,30 +32,47 @@ export function createAliyunAccessTokenService(endpoint: string) {
 
   async function getToken() {
     try {
+      logger.info(`${logIdentifier} Creating token...`);
       const result = await client.request<AliyunCreateTokenResponse>(
         "CreateToken",
         {}
       );
       if (result.ErrMsg !== "") {
-        syslog(result.ErrMsg);
+        logger.error(
+          `${logIdentifier} Failed to create token: ${result.ErrMsg}`
+        );
       } else {
+        logger.info(
+          `${logIdentifier} Succeeded. Expire time: ${result.Token.ExpireTime}`
+        );
         token = result.Token;
       }
     } catch (e) {
-      syslog(`${e}`);
+      logger.error(
+        `${logIdentifier} Failed to create token: ${formatError(e)}`
+      );
     }
   }
 
   return {
     async getToken() {
       if (process.env.NODE_ENV === "Dev") {
+        logger.debug(`${logIdentifier} Dev env detected, using testing token.`);
         return {
           UserId: "1234567890",
-          Id: process.env.TESTING_ALIYUN_NLS_ACCESS_TOKEN,
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          Id: process.env.TESTING_ALIYUN_NLS_ACCESS_TOKEN!,
           ExpireTime: 2000000000,
         };
       }
-      if (token === null || token.ExpireTime * 1000 - Date.now() < 3600000) {
+      const tokenExpired =
+        token === null ? false : token.ExpireTime * 1000 - Date.now() < 3600000;
+      if (token === null || tokenExpired) {
+        if (token === null) {
+          logger.info(`${logIdentifier} No existing token.`);
+        } else if (tokenExpired) {
+          logger.info(`${logIdentifier} Existing token expired.`);
+        }
         await getToken();
         return token;
       }

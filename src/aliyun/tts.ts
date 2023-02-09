@@ -2,34 +2,27 @@
 // @ts-ignore
 import nls from "alibabacloud-nls";
 import { createWriteStream } from "fs";
-import { syslog } from "../log";
-import { createAliyunAccessTokenService } from "./access-token-service";
+import { last } from "lodash";
+import { sep } from "path";
+import { logger } from "../log";
+import { formatError } from "../util";
 
-export async function tts(text: string, outputFile: string) {
-  syslog(`speak: ${text}`);
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+const logIdentifier = last(__filename.split(sep))!;
 
-  const aliyunNLSTokenService = createAliyunAccessTokenService(
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    process.env.ALIYUN_NLS_TOKEN_ENDPOINT!
-  );
-
-  const token = await aliyunNLSTokenService.getToken();
-
-  if (token === null) {
-    syslog("Get NLS app access token failed!");
-    return;
-  }
+export async function tts(text: string, outputFile: string, token: string) {
+  logger.info(`${logIdentifier} Converting text to speech: "${text}"`);
 
   const dumpFile = createWriteStream(outputFile, { flags: "w" });
 
   const tts = new nls.SpeechSynthesizer({
     url: process.env.ALIYUN_NLS_WS,
     appkey: process.env.ALIYUN_NLS_APP_KEY,
-    token: token.Id,
+    token,
   });
 
   tts.on("meta", (msg: unknown) => {
-    syslog(`TTS Client received metainfo: ${msg}`);
+    logger.debug(`${logIdentifier} tts event_meta: ${msg}`);
   });
 
   tts.on("data", (msg: unknown) => {
@@ -37,27 +30,30 @@ export async function tts(text: string, outputFile: string) {
   });
 
   tts.on("completed", (msg: unknown) => {
-    syslog(`TTS Client received completed: ${msg}`);
+    logger.debug(`${logIdentifier} tts event_completed: ${msg}`);
   });
 
   tts.on("closed", () => {
-    syslog("TTS Client received closed.");
+    logger.debug(`${logIdentifier} tts event_closed.`);
   });
 
   tts.on("failed", (msg: unknown) => {
-    syslog(`TTS Client received failed: ${msg}`);
+    logger.debug(`${logIdentifier} tts event_failed: ${msg}`);
   });
 
   const param = tts.defaultStartParams();
-  param.text = text;
+  param.text = `<speak voice="${process.env.ALIYUN_NLS_VOICE}">
+  <emotion category="${process.env.ALIYUN_NLS_EMOTION}" intensity="1.0">${text}</emotion></speak>`;
   param.voice = process.env.ALIYUN_NLS_VOICE;
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  param.speech_rate = parseInt(process.env.ALIYUN_NLS_SPEECH_RATE!);
   try {
     await tts.start(param, true, 6000);
   } catch (error) {
-    syslog(`Error on start TTS: ${error}`);
+    logger.error(`${logIdentifier} Failed to start tts: ${formatError(error)}`);
     return;
   } finally {
     dumpFile.end();
   }
-  syslog("TTS synthesis done.");
+  logger.info(`${logIdentifier} Text to speech done!`);
 }
