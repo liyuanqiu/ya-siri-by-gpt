@@ -1,26 +1,35 @@
-import { config } from "dotenv";
-import { Configuration, OpenAIApi } from "openai";
-import { join } from "path";
+import { file } from "tmp-promise";
+import { stt } from "./aliyun/stt";
+import { tts } from "./aliyun/tts";
+import { gptTextCompletion } from "./gpt/text-completion";
+import "./init";
+import { syslog } from "./log";
+import { micRecord } from "./mic-record";
+import { sleep } from "./util";
 
-config({
-  path: join(__dirname, "..", ".env"),
-});
-
-const configuration = new Configuration({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-const openai = new OpenAIApi(configuration);
 (async () => {
-  const completion = await openai.createCompletion({
-    model: "text-davinci-003",
-    prompt: "十三加六等于几？请用中文进行回答。",
-    temperature: 0,
-    max_tokens: 256,
-    top_p: 1,
-    frequency_penalty: 0,
-    presence_penalty: 0,
-  });
+  const micFile = await file();
+  const answerFile = await file();
 
-  console.log(completion.data.choices[0].text);
+  const stopMic = micRecord(micFile.path);
+
+  await sleep(3000);
+
+  stopMic();
+
+  const text = await stt(micFile.path);
+
+  if (text !== undefined) {
+    const answer = await gptTextCompletion(text);
+
+    if (answer !== undefined) {
+      await tts(answer, answerFile.path);
+    }
+  }
+
+  micFile.cleanup();
+
+  // TODO: play the file
+  syslog(answerFile.path);
+  // answerFile.cleanup();
 })();

@@ -4,6 +4,7 @@
     "moduleResolution": "nodenext",
     "target": "es2020",
     "sourceMap": true,
+    "strict": true,
     "outDir": "dist",
     "noUncheckedIndexedAccess": true
   },
