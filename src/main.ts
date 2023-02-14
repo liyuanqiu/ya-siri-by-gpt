@@ -6,7 +6,7 @@ import { file } from "tmp-promise";
 import { createAliyunAccessTokenService } from "./aliyun/access-token-service";
 import { stt } from "./aliyun/stt";
 import { tts } from "./aliyun/tts";
-import { gptTextCompletion } from "./gpt/text-completion";
+import { gptTextCompletionAzure } from "./gpt/text-completion-azure";
 import "./init";
 import { logger } from "./log";
 import { micRecord } from "./mic-record";
@@ -40,7 +40,7 @@ const logIdentifier = last(__filename.split(sep))!;
   const text = await stt(micFile.path, token.Id);
 
   if (text !== undefined) {
-    const answer = await gptTextCompletion(text);
+    const answer = await gptTextCompletionAzure(text);
 
     if (answer !== undefined) {
       await tts(answer, answerFile.path, token.Id);

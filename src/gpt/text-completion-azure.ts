@@ -1,5 +1,5 @@
+import axios from "axios";
 import { last } from "lodash";
-import { Configuration, OpenAIApi } from "openai";
 import { sep } from "path";
 import { logger } from "../log";
 import { formatError, retryFunction } from "../util";
@@ -7,12 +7,28 @@ import { formatError, retryFunction } from "../util";
 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
 const logIdentifier = last(__filename.split(sep))!;
 
-export async function gptTextCompletion(prompt: string, retry = 3) {
-  const configuration = new Configuration({
-    apiKey: process.env.OPENAI_API_KEY,
-  });
+export async function gptTextCompletionAzure(prompt: string, retry = 3) {
+  const endpoint =
+    process.env.OPENAI_AZURE_API_BASEPATH +
+    "/openai/deployments/" +
+    process.env.OPENAI_AZURE_API_DEPLOYMENT_NAME +
+    "/completions?api-version=" +
+    process.env.OPENAI_AZURE_API_VERSION;
 
-  const openai = new OpenAIApi(configuration);
+  const headers = {
+    "api-key": process.env.OPENAI_AZURE_API_KEY,
+    "Content-Type": "application/json",
+  };
+
+  const payload = {
+    model: "text-davinci-003",
+    prompt: `${prompt}？请用儿歌来回答，不超过50个字。`,
+    temperature: 0.7,
+    max_tokens: 256,
+    top_p: 1,
+    frequency_penalty: 0,
+    presence_penalty: 0,
+  };
 
   logger.info(`${logIdentifier} I'm thinking...`);
 
@@ -23,14 +39,8 @@ export async function gptTextCompletion(prompt: string, retry = 3) {
   try {
     const completion = await retryFunction(
       () =>
-        openai.createCompletion({
-          model: "text-davinci-003",
-          prompt: `${prompt}？请用儿歌来回答，不超过50个字。`,
-          temperature: 0.7,
-          max_tokens: 256,
-          top_p: 1,
-          frequency_penalty: 0,
-          presence_penalty: 0,
+        axios.post(endpoint, payload, {
+          headers,
         }),
       retry,
       (retry, error) => {
@@ -53,7 +63,7 @@ export async function gptTextCompletion(prompt: string, retry = 3) {
 if (require.main === module) {
   (async () => {
     require("../init");
-    const text = await gptTextCompletion("三加九等于几？");
+    const text = await gptTextCompletionAzure("三加九等于几？");
     console.log(text);
   })();
 }
