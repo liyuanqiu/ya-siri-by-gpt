@@ -28,7 +28,7 @@ export async function stt(inputFile: string, token: string) {
     );
   });
 
-  return new Promise<string>((resolve) => {
+  return new Promise<string>((resolve, reject) => {
     audioStream.on("close", async () => {
       const stt = new nls.SpeechRecognition({
         url: process.env.ALIYUN_NLS_WS,
@@ -50,21 +50,27 @@ export async function stt(inputFile: string, token: string) {
       });
 
       stt.on("failed", (msg: unknown) => {
-        logger.debug(`${logIdentifier} stt event_failed: ${msg}`);
+        const errStr = `${logIdentifier} stt event_failed: ${msg}`;
+        logger.error(errStr);
+        reject(errStr);
       });
 
       try {
         await stt.start(stt.defaultStartParams(), true, 6000);
       } catch (error) {
-        logger.error(
-          `${logIdentifier} Failed to start stt: ${formatError(error)}`
-        );
+        const errStr = `${logIdentifier} Failed to start stt: ${formatError(
+          error
+        )}`;
+        logger.error(errStr);
+        reject(errStr);
         return;
       }
 
       for (const chunk of audioChunks) {
         if (!stt.sendAudio(chunk)) {
-          logger.error(`${logIdentifier} Failed to send audio.`);
+          const errStr = `${logIdentifier} Failed to send audio.`;
+          logger.error(errStr);
+          reject(errStr);
           return;
         }
         await sleep(20);
@@ -74,9 +80,12 @@ export async function stt(inputFile: string, token: string) {
         await stt.close();
         logger.info(`${logIdentifier} stt closed.`);
       } catch (error) {
-        logger.error(
-          `${logIdentifier} Failed to close stt: ${formatError(error)}`
-        );
+        const errStr = `${logIdentifier} Failed to close stt: ${formatError(
+          error
+        )}`;
+        logger.error(errStr);
+        reject(errStr);
+        return;
       }
     });
   });

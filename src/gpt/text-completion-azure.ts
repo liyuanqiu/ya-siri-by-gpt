@@ -1,5 +1,6 @@
 import axios from "axios";
 import { last } from "lodash";
+import { CreateCompletionRequest, CreateCompletionResponse } from "openai";
 import { sep } from "path";
 import { logger } from "../log";
 import { formatError, retryFunction } from "../util";
@@ -20,11 +21,11 @@ export async function gptTextCompletionAzure(prompt: string, retry = 3) {
     "Content-Type": "application/json",
   };
 
-  const payload = {
+  const payload: CreateCompletionRequest = {
     model: "text-davinci-003",
-    prompt: `${prompt}？请用儿歌来回答，不超过50个字。`,
+    prompt: `${prompt}${process.env.PROMPT_SUFFIX}\n\n`,
     temperature: 0.7,
-    max_tokens: 256,
+    max_tokens: 2048,
     top_p: 1,
     frequency_penalty: 0,
     presence_penalty: 0,
@@ -39,7 +40,7 @@ export async function gptTextCompletionAzure(prompt: string, retry = 3) {
   try {
     const completion = await retryFunction(
       () =>
-        axios.post(endpoint, payload, {
+        axios.post<CreateCompletionResponse>(endpoint, payload, {
           headers,
         }),
       retry,

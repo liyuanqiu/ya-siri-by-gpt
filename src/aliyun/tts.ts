@@ -38,7 +38,7 @@ export async function tts(text: string, outputFile: string, token: string) {
   });
 
   tts.on("failed", (msg: unknown) => {
-    logger.debug(`${logIdentifier} tts event_failed: ${msg}`);
+    logger.error(`${logIdentifier} tts event_failed: ${msg}`);
   });
 
   const param = tts.defaultStartParams();

@@ -15,12 +15,12 @@ export function micRecord(outputFile: string) {
   const outputFileStream = createWriteStream(outputFile);
   micInputStream.pipe(outputFileStream);
 
-  process.on("SIGINT", function () {
+  function stop() {
     micInstance.stop();
-  });
+    micInputStream.destroy();
+    outputFileStream.destroy();
+  }
 
   micInstance.start();
-  return () => {
-    micInstance.stop();
-  };
+  return stop;
 }

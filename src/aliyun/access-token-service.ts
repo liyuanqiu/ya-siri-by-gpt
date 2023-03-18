@@ -56,15 +56,6 @@ export function createAliyunAccessTokenService(endpoint: string) {
 
   return {
     async getToken() {
-      if (process.env.NODE_ENV === "Dev") {
-        logger.debug(`${logIdentifier} Dev env detected, using testing token.`);
-        return {
-          UserId: "1234567890",
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-          Id: process.env.TESTING_ALIYUN_NLS_ACCESS_TOKEN!,
-          ExpireTime: 2000000000,
-        };
-      }
       const tokenExpired =
         token === null ? false : token.ExpireTime * 1000 - Date.now() < 3600000;
       if (token === null || tokenExpired) {
